@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import QueueForm from "@/components/queue-form"
 import ClientTicket from "@/components/client-ticket"
 import type { Queue } from "@/types/supabase"
@@ -13,8 +13,6 @@ export default function HomePage() {
 
   const handleSuccess = (newClient: Queue & { ticketNumber: number }) => {
     setClient(newClient)
-
-    // Salvar no localStorage para persistência
     localStorage.setItem("queueClient", JSON.stringify(newClient))
   }
 
@@ -23,50 +21,57 @@ export default function HomePage() {
     localStorage.removeItem("queueClient")
   }
 
+  const handleReenter = () => {
+    setClient(null)
+    localStorage.removeItem("queueClient")
+  }
+
   // Verificar se há um cliente salvo no localStorage
-  useState(() => {
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const savedClient = localStorage.getItem("queueClient")
       if (savedClient) {
         try {
-          setClient(JSON.parse(savedClient))
+          const parsedClient = JSON.parse(savedClient)
+          setClient(parsedClient)
         } catch (error) {
           console.error("Erro ao carregar cliente do localStorage:", error)
           localStorage.removeItem("queueClient")
         }
       }
     }
-  })
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm">
-        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
-        <Link href="/">
-          <h1 className="text-xl font-bold text-gray-900">Sistema de Filas</h1>
-        </Link>
+        <div className="max-w-7xl mx-auto py-3 sm:py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
+          <Link href="/">
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900">Sistema de Filas</h1>
+          </Link>
           <Link href="/admin" passHref>
             <Button variant="ghost" size="sm">
               <ShieldCheck className="h-4 w-4 mr-2" />
-              Área Admin
+              <span className="hidden sm:inline">Área Admin</span>
+              <span className="sm:hidden">Admin</span>
             </Button>
           </Link>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
+      <main className="max-w-7xl mx-auto py-4 sm:py-6 px-4 sm:px-6 lg:px-8">
+        <div className="py-4 sm:py-6">
           {client ? (
-            <ClientTicket client={client} onAbandon={handleAbandon} />
+            <ClientTicket client={client} onAbandon={handleAbandon} onReenter={handleReenter} />
           ) : (
             <QueueForm onSuccess={handleSuccess} />
           )}
         </div>
       </main>
 
-      <footer className="bg-white border-t">
-        <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
-          <p className="text-center text-sm text-gray-500">
+      <footer className="bg-white border-t mt-auto">
+        <div className="max-w-7xl mx-auto py-3 sm:py-4 px-4 sm:px-6 lg:px-8">
+          <p className="text-center text-xs sm:text-sm text-gray-500">
             &copy; {new Date().getFullYear()} Sistema de Gerenciamento de Filas
           </p>
         </div>

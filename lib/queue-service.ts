@@ -1,17 +1,23 @@
 import { createServerSupabaseClient } from "./supabase"
 import { sendConfirmationEmail, sendNotificationEmail, sendAlmostYourTurnEmail } from "./email-service"
+import { sendConfirmationSMS, sendNotificationSMS, sendAlmostYourTurnSMS } from "./sms-service"
 
 // Função para adicionar cliente à fila
 export async function addToQueue(name: string, phone: string, email: string) {
   const supabase = createServerSupabaseClient()
 
   try {
+    console.log("➕ Adicionando cliente à fila:", { name, phone, email })
+
+    // Verificar se as tabelas existem e criar configurações se necessário
+    await ensureQueueSettingsExist(supabase)
+
     // Obter as configurações da fila
     const { data: queueSettings, error: settingsError } = await supabase.from("queue_settings").select("*").single()
 
-    if (settingsError || !queueSettings) {
-      console.error("Erro ao obter configurações:", settingsError)
-      throw new Error("Configurações da fila não encontradas")
+    if (settingsError) {
+      console.error("❌ Erro ao obter configurações:", settingsError)
+      throw new Error(`Configurações da fila não encontradas: ${settingsError.message}`)
     }
 
     // Incrementar o número do ticket
@@ -36,8 +42,8 @@ export async function addToQueue(name: string, phone: string, email: string) {
       .single()
 
     if (error) {
-      console.error("Erro ao inserir na fila:", error)
-      throw new Error(error.message)
+      console.error("❌ Erro ao inserir na fila:", error)
+      throw new Error(`Erro ao inserir na fila: ${error.message}`)
     }
 
     // Atualizar o último número de ticket
@@ -50,54 +56,140 @@ export async function addToQueue(name: string, phone: string, email: string) {
       .eq("id", queueSettings.id)
 
     if (updateError) {
-      console.error("Erro ao atualizar configurações:", updateError)
+      console.error("⚠️ Erro ao atualizar configurações:", updateError)
     }
 
-    // Enviar email de confirmação
-    await sendConfirmationEmail(data.email, data.name, newTicketNumber, position + 1)
+    // Enviar notificações (email e SMS) com tratamento de erro
+    try {
+      await Promise.all([
+        sendConfirmationEmail(data.email, data.name, newTicketNumber, position + 1).catch((error) => {
+          console.error("⚠️ Erro ao enviar email de confirmação:", error)
+        }),
+        sendConfirmationSMS(data.phone, data.name, newTicketNumber, position + 1).catch((error) => {
+          console.error("⚠️ Erro ao enviar SMS de confirmação:", error)
+        }),
+      ])
+      console.log("📧📱 Notificações enviadas")
+    } catch (error) {
+      console.error("⚠️ Erro ao enviar notificações:", error)
+      // Não falha a operação se as notificações não forem enviadas
+    }
 
+    console.log("✅ Cliente adicionado com sucesso:", data.name)
     return { ...data, ticketNumber: newTicketNumber }
   } catch (error) {
-    console.error("Erro no addToQueue:", error)
+    console.error("💥 Erro no addToQueue:", error)
     throw error
   }
 }
 
 // Função para obter o cliente atual sendo atendido
 export async function getCurrentTicket() {
-  const supabase = createServerSupabaseClient()
-
   try {
-    const { data: settings } = await supabase.from("queue_settings").select("current_ticket").single()
+    console.log("🔍 Buscando ticket atual...")
+
+    const supabase = createServerSupabaseClient()
+
+    if (!supabase) {
+      throw new Error("Falha ao criar cliente Supabase")
+    }
+
+    const { data: settings, error: settingsError } = await supabase
+      .from("queue_settings")
+      .select("current_ticket")
+      .single()
+
+    if (settingsError) {
+      console.error("❌ Erro ao buscar configurações:", settingsError)
+
+      if (settingsError.code === "PGRST116" || settingsError.message?.includes("does not exist")) {
+        console.log("⚠️ Tabela queue_settings não existe ou está vazia")
+        return null
+      }
+
+      throw new Error(`Erro nas configurações: ${settingsError.message}`)
+    }
 
     if (!settings?.current_ticket) {
+      console.log("ℹ️ Nenhum ticket atual definido")
       return null
     }
 
-    const { data: currentTicket } = await supabase.from("queues").select("*").eq("id", settings.current_ticket).single()
+    const { data: currentTicket, error: ticketError } = await supabase
+      .from("queues")
+      .select("*")
+      .eq("id", settings.current_ticket)
+      .single()
 
+    if (ticketError) {
+      console.error("❌ Erro ao buscar ticket atual:", ticketError)
+
+      if (ticketError.code === "PGRST116") {
+        console.log("⚠️ Ticket atual não existe mais, limpando referência")
+        return null
+      }
+
+      throw new Error(`Erro ao buscar ticket: ${ticketError.message}`)
+    }
+
+    console.log("✅ Ticket atual encontrado:", currentTicket?.name)
     return currentTicket
   } catch (error) {
-    console.error("Erro ao obter ticket atual:", error)
+    console.error("💥 Erro crítico ao obter ticket atual:", error)
     return null
   }
 }
 
 // Função para obter todos os clientes na fila
 export async function getQueueClients() {
-  const supabase = createServerSupabaseClient()
-
   try {
-    const { data } = await supabase
+    console.log("🔍 Buscando clientes na fila...")
+
+    const supabase = createServerSupabaseClient()
+
+    if (!supabase) {
+      throw new Error("Falha ao criar cliente Supabase")
+    }
+
+    const { data, error } = await supabase
       .from("queues")
       .select("*")
       .eq("status", "waiting")
       .order("position", { ascending: true })
 
+    if (error) {
+      console.error("❌ Erro ao buscar clientes:", error)
+
+      if (error.code === "PGRST116" || error.message?.includes("does not exist")) {
+        console.log("⚠️ Tabela queues não existe")
+        return []
+      }
+
+      throw new Error(`Erro ao buscar clientes: ${error.message}`)
+    }
+
+    console.log(`✅ ${data?.length || 0} clientes encontrados na fila`)
     return data || []
   } catch (error) {
-    console.error("Erro ao obter clientes da fila:", error)
+    console.error("💥 Erro crítico ao obter clientes da fila:", error)
     return []
+  }
+}
+
+// Função auxiliar para garantir que as configurações existam
+async function ensureQueueSettingsExist(supabase: any) {
+  try {
+    const { data: existing } = await supabase.from("queue_settings").select("id").single()
+
+    if (!existing) {
+      console.log("🔧 Criando configurações iniciais da fila...")
+      await supabase.from("queue_settings").insert({
+        current_ticket: null,
+        last_ticket_number: 0,
+      })
+    }
+  } catch (error) {
+    console.log("ℹ️ Configurações da fila já existem ou erro esperado:", error)
   }
 }
 
@@ -106,7 +198,8 @@ export async function callNextClient() {
   const supabase = createServerSupabaseClient()
 
   try {
-    // Obter o próximo cliente na fila
+    console.log("📞 Chamando próximo cliente...")
+
     const { data: nextClient } = await supabase
       .from("queues")
       .select("*")
@@ -116,10 +209,10 @@ export async function callNextClient() {
       .single()
 
     if (!nextClient) {
+      console.log("ℹ️ Não há clientes na fila")
       return null
     }
 
-    // Atualizar o status do cliente
     const { data: updatedClient, error: updateError } = await supabase
       .from("queues")
       .update({
@@ -131,14 +224,14 @@ export async function callNextClient() {
       .single()
 
     if (updateError) {
-      throw new Error(updateError.message)
+      throw new Error(`Erro ao atualizar cliente: ${updateError.message}`)
     }
 
-    // Obter configurações para atualizar
+    await ensureQueueSettingsExist(supabase)
+
     const { data: settings } = await supabase.from("queue_settings").select("id").single()
 
     if (settings) {
-      // Atualizar as configurações da fila
       await supabase
         .from("queue_settings")
         .update({
@@ -148,15 +241,27 @@ export async function callNextClient() {
         .eq("id", settings.id)
     }
 
-    // Enviar notificação por email
-    await sendNotificationEmail(updatedClient.email, updatedClient.name)
+    // Enviar notificações (email e SMS) com tratamento de erro
+    try {
+      await Promise.all([
+        sendNotificationEmail(updatedClient.email, updatedClient.name).catch((error) => {
+          console.error("⚠️ Erro ao enviar email de notificação:", error)
+        }),
+        sendNotificationSMS(updatedClient.phone, updatedClient.name).catch((error) => {
+          console.error("⚠️ Erro ao enviar SMS de notificação:", error)
+        }),
+      ])
+      console.log("📧📱 Notificações de chamada enviadas")
+    } catch (error) {
+      console.error("⚠️ Erro ao enviar notificações:", error)
+    }
 
-    // Verificar se há clientes que precisam ser notificados (faltando 3 pessoas)
     await checkAndNotifyUpcoming()
 
+    console.log("✅ Cliente chamado com sucesso:", updatedClient.name)
     return updatedClient
   } catch (error) {
-    console.error("Erro ao chamar próximo cliente:", error)
+    console.error("💥 Erro ao chamar próximo cliente:", error)
     throw error
   }
 }
@@ -166,7 +271,6 @@ export async function checkAndNotifyUpcoming() {
   const supabase = createServerSupabaseClient()
 
   try {
-    // Obter clientes na fila
     const { data: clients } = await supabase
       .from("queues")
       .select("*")
@@ -177,28 +281,27 @@ export async function checkAndNotifyUpcoming() {
       return
     }
 
-    // Notificar clientes que estão na posição 3 (faltam 3 pessoas)
-    const clientToNotify = clients.find((client) => client.position === 3)
-    if (clientToNotify) {
-      await sendAlmostYourTurnEmail(clientToNotify.email, clientToNotify.name, 3)
-      console.log(`Notificado cliente ${clientToNotify.name} que está próximo de ser chamado`)
-    }
-
-    // Notificar clientes que estão na posição 2 (faltam 2 pessoas)
-    const clientToNotify2 = clients.find((client) => client.position === 2)
-    if (clientToNotify2) {
-      await sendAlmostYourTurnEmail(clientToNotify2.email, clientToNotify2.name, 2)
-      console.log(`Notificado cliente ${clientToNotify2.name} que está próximo de ser chamado`)
-    }
-
-    // Notificar clientes que estão na posição 1 (falta 1 pessoa)
-    const clientToNotify1 = clients.find((client) => client.position === 1)
-    if (clientToNotify1) {
-      await sendAlmostYourTurnEmail(clientToNotify1.email, clientToNotify1.name, 1)
-      console.log(`Notificado cliente ${clientToNotify1.name} que está próximo de ser chamado`)
+    // Notificar clientes nas posições 1, 2 e 3
+    for (const position of [1, 2, 3]) {
+      const clientToNotify = clients.find((client) => client.position === position)
+      if (clientToNotify) {
+        try {
+          await Promise.all([
+            sendAlmostYourTurnEmail(clientToNotify.email, clientToNotify.name, position).catch((error) => {
+              console.error("⚠️ Erro ao enviar email de aviso:", error)
+            }),
+            sendAlmostYourTurnSMS(clientToNotify.phone, clientToNotify.name, position).catch((error) => {
+              console.error("⚠️ Erro ao enviar SMS de aviso:", error)
+            }),
+          ])
+          console.log(`📧📱 Notificado cliente ${clientToNotify.name} (posição ${position})`)
+        } catch (error) {
+          console.error("⚠️ Erro ao enviar notificações de aviso:", error)
+        }
+      }
     }
   } catch (error) {
-    console.error("Erro ao verificar e notificar clientes próximos:", error)
+    console.error("💥 Erro ao verificar e notificar clientes próximos:", error)
   }
 }
 
@@ -213,7 +316,6 @@ export async function abandonQueue(clientId: string) {
       throw new Error("Cliente não encontrado")
     }
 
-    // Atualizar o status do cliente
     const { error } = await supabase
       .from("queues")
       .update({
@@ -222,15 +324,14 @@ export async function abandonQueue(clientId: string) {
       .eq("id", clientId)
 
     if (error) {
-      throw new Error(error.message)
+      throw new Error(`Erro ao abandonar fila: ${error.message}`)
     }
 
-    // Verificar se há clientes que precisam ser notificados após a desistência
     await checkAndNotifyUpcoming()
 
     return true
   } catch (error) {
-    console.error("Erro ao abandonar fila:", error)
+    console.error("💥 Erro ao abandonar fila:", error)
     throw error
   }
 }
@@ -243,10 +344,10 @@ export async function completeCurrentService() {
     const { data: settings } = await supabase.from("queue_settings").select("current_ticket, id").single()
 
     if (!settings?.current_ticket) {
+      console.log("ℹ️ Nenhum atendimento atual para completar")
       return null
     }
 
-    // Atualizar o status do cliente
     await supabase
       .from("queues")
       .update({
@@ -255,7 +356,6 @@ export async function completeCurrentService() {
       })
       .eq("id", settings.current_ticket)
 
-    // Limpar o ticket atual
     await supabase
       .from("queue_settings")
       .update({
@@ -264,12 +364,12 @@ export async function completeCurrentService() {
       })
       .eq("id", settings.id)
 
-    // Verificar se há clientes que precisam ser notificados após o atendimento
     await checkAndNotifyUpcoming()
 
+    console.log("✅ Atendimento completado com sucesso")
     return true
   } catch (error) {
-    console.error("Erro ao completar atendimento:", error)
+    console.error("💥 Erro ao completar atendimento:", error)
     throw error
   }
 }

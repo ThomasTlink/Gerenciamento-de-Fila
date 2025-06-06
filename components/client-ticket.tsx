@@ -5,24 +5,30 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import type { Queue } from "@/types/supabase"
-import { AlertCircle, Clock, Users } from "lucide-react"
+import { AlertCircle, Clock, Users, RotateCcw } from "lucide-react"
 
 interface ClientTicketProps {
   client: Queue & { ticketNumber: number }
   onAbandon: () => void
+  onReenter: () => void
 }
 
-export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
+export default function ClientTicket({ client, onAbandon, onReenter }: ClientTicketProps) {
   const [currentTicket, setCurrentTicket] = useState<Queue | null>(null)
   const [queueClients, setQueueClients] = useState<Queue[]>([])
   const [position, setPosition] = useState<number | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
 
   useEffect(() => {
-    // Função para obter dados da fila
     const fetchQueueData = async () => {
       try {
         const response = await fetch("/api/queue")
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
+
         const data = await response.json()
 
         if (data.currentTicket) {
@@ -32,30 +38,29 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
         if (data.clients) {
           setQueueClients(data.clients)
 
-          // Encontrar posição do cliente atual
           const clientInQueue = data.clients.find((c: Queue) => c.id === client.id)
           if (clientInQueue) {
             setPosition(clientInQueue.position)
           } else if (data.currentTicket?.id === client.id) {
-            // Cliente está sendo atendido
             setPosition(-1)
           } else {
-            // Cliente não está mais na fila
             setPosition(null)
           }
         }
       } catch (error) {
         console.error("Erro ao obter dados da fila:", error)
+        toast({
+          variant: "destructive",
+          title: "Erro de conexão",
+          description: "Não foi possível atualizar os dados da fila.",
+        })
       }
     }
 
     fetchQueueData()
-
-    // Atualizar a cada 5 segundos
     const interval = setInterval(fetchQueueData, 5000)
-
     return () => clearInterval(interval)
-  }, [client.id])
+  }, [client.id, toast])
 
   // Configurar notificações do navegador
   useEffect(() => {
@@ -67,7 +72,6 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
   // Verificar se é a vez do cliente
   useEffect(() => {
     if (currentTicket?.id === client.id) {
-      // Notificar o cliente
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("É a sua vez!", {
           body: "Você tem 2 minutos para comparecer ao atendimento ou perderá sua vez na fila.",
@@ -75,16 +79,14 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
         })
       }
 
-      // Tocar um som
       const audio = new Audio("/notification.mp3")
       audio.play().catch((e) => console.error("Erro ao tocar áudio:", e))
     }
   }, [currentTicket, client.id])
 
-  // Verificar se o cliente está próximo de ser chamado (posição 3 ou menos)
+  // Verificar se o cliente está próximo de ser chamado
   useEffect(() => {
     if (position !== null && position >= 0 && position <= 3 && position !== -1) {
-      // Notificar o cliente
       if ("Notification" in window && Notification.permission === "granted") {
         new Notification("Quase na sua vez!", {
           body: `Faltam apenas ${position} ${position === 1 ? "pessoa" : "pessoas"} para sua vez. Dirija-se para próximo da loja.`,
@@ -95,6 +97,7 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
   }, [position])
 
   const handleAbandon = async () => {
+    setIsLoading(true)
     try {
       const response = await fetch("/api/queue/abandon", {
         method: "POST",
@@ -120,57 +123,69 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
         title: "Erro",
         description: "Não foi possível desistir da fila.",
       })
+    } finally {
+      setIsLoading(false)
     }
   }
 
   const getStatusMessage = () => {
     if (position === -1 || currentTicket?.id === client.id) {
       return (
-        <div className="bg-green-100 p-4 rounded-md text-green-800 text-center">
-          <h3 className="text-lg font-bold">É a sua vez!</h3>
-          <p>Entre na loja imediatamente.</p>
-          <p className="mt-2 text-red-600 font-bold">Você tem apenas 2 minutos para comparecer ou perderá sua vez!</p>
+        <div className="bg-green-100 p-3 sm:p-4 rounded-md text-green-800 text-center">
+          <h3 className="text-base sm:text-lg font-bold">É a sua vez!</h3>
+          <p className="text-sm sm:text-base">Entre na loja imediatamente.</p>
+          <p className="mt-2 text-red-600 font-bold text-xs sm:text-sm">
+            Você tem apenas 2 minutos para comparecer ou perderá sua vez!
+          </p>
         </div>
       )
     }
 
     if (position === null) {
       return (
-        <div className="bg-red-100 p-4 rounded-md text-red-800 text-center">
-          <h3 className="text-lg font-bold">Você não está mais na fila</h3>
-          <p>Seu atendimento já foi concluído ou você desistiu da fila.</p>
+        <div className="bg-red-100 p-3 sm:p-4 rounded-md text-red-800 text-center space-y-3">
+          <div>
+            <h3 className="text-base sm:text-lg font-bold">Você não está mais na fila</h3>
+            <p className="text-sm sm:text-base">Seu atendimento já foi concluído ou você desistiu da fila.</p>
+          </div>
+          <Button onClick={onReenter} variant="outline" size="sm" className="w-full sm:w-auto">
+            <RotateCcw className="h-4 w-4 mr-2" />
+            Entrar na fila novamente
+          </Button>
         </div>
       )
     }
 
     if (position <= 3) {
       return (
-        <div className="bg-yellow-50 p-4 rounded-md text-yellow-800">
+        <div className="bg-yellow-50 p-3 sm:p-4 rounded-md text-yellow-800">
           <div className="flex items-center justify-center gap-2 mb-2">
-            <Clock className="h-5 w-5" />
-            <h3 className="text-lg font-bold">Prepare-se!</h3>
+            <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+            <h3 className="text-base sm:text-lg font-bold">Prepare-se!</h3>
           </div>
-          <p className="text-center">
-            Sua posição na fila: <span className="font-bold text-xl">{position + 1}</span>
+          <p className="text-center text-sm sm:text-base">
+            Sua posição na fila: <span className="font-bold text-lg sm:text-xl">{position + 1}</span>
           </p>
-          <p className="text-center font-medium mt-2">
+          <p className="text-center font-medium mt-2 text-sm sm:text-base">
             Faltam apenas {position} {position === 1 ? "pessoa" : "pessoas"} para sua vez!
           </p>
-          <p className="text-center mt-2 font-bold">Por favor, dirija-se para próximo da loja agora!</p>
+          <p className="text-center mt-2 font-bold text-xs sm:text-sm">
+            Por favor, dirija-se para próximo da loja agora!
+          </p>
         </div>
       )
     }
 
     return (
-      <div className="bg-blue-50 p-4 rounded-md text-blue-800">
+      <div className="bg-blue-50 p-3 sm:p-4 rounded-md text-blue-800">
         <div className="flex items-center justify-center gap-2 mb-2">
-          <Clock className="h-5 w-5" />
-          <h3 className="text-lg font-bold">Aguardando atendimento</h3>
+          <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
+          <h3 className="text-base sm:text-lg font-bold">Aguardando atendimento</h3>
         </div>
-        <p className="text-center">
-          Sua posição na fila: <span className="font-bold text-xl">{position + 1}</span>
+        <p className="text-center text-sm sm:text-base">
+          Sua posição na fila: <span className="font-bold text-lg sm:text-xl">{position + 1}</span>
         </p>
-        <p className="text-center text-sm mt-1">
+        <p className="text-center text-xs sm:text-sm mt-1">
           {position === 0
             ? "Você é o próximo!"
             : `Faltam ${position} ${position === 1 ? "pessoa" : "pessoas"} para chegar a sua vez`}
@@ -181,57 +196,67 @@ export default function ClientTicket({ client, onAbandon }: ClientTicketProps) {
 
   return (
     <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Seu Ticket: #{client.ticketNumber}</CardTitle>
-        <CardDescription>Olá, {client.name}</CardDescription>
+      <CardHeader className="pb-3 sm:pb-6">
+        <CardTitle className="text-lg sm:text-xl">Seu Ticket: #{client.ticketNumber}</CardTitle>
+        <CardDescription className="text-sm sm:text-base">Olá, {client.name}</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 sm:space-y-4">
         {getStatusMessage()}
 
-        <div className="border rounded-md p-4">
+        <div className="border rounded-md p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
-              <Users className="h-5 w-5 text-gray-500" />
-              <h3 className="font-medium">Fila de Atendimento</h3>
+              <Users className="h-4 w-4 sm:h-5 sm:w-5 text-gray-500" />
+              <h3 className="font-medium text-sm sm:text-base">Fila de Atendimento</h3>
             </div>
-            <span className="bg-gray-100 text-gray-700 text-sm px-2 py-1 rounded-md">
+            <span className="bg-gray-100 text-gray-700 text-xs sm:text-sm px-2 py-1 rounded-md">
               {queueClients.length} na fila
             </span>
           </div>
 
           {currentTicket && (
             <div className="bg-green-50 border border-green-100 rounded p-2 mb-2">
-              <p className="text-sm font-medium">
+              <p className="text-xs sm:text-sm font-medium">
                 Sendo atendido: <span className="font-bold">{currentTicket.name}</span>
               </p>
             </div>
           )}
 
           {queueClients.length > 0 ? (
-            <div className="max-h-32 overflow-y-auto">
+            <div className="max-h-24 sm:max-h-32 overflow-y-auto">
               <ul className="space-y-1">
                 {queueClients.slice(0, 5).map((queueClient, index) => (
                   <li
                     key={queueClient.id}
-                    className={`text-sm p-1 rounded ${queueClient.id === client.id ? "bg-blue-50 font-medium" : ""}`}
+                    className={`text-xs sm:text-sm p-1 rounded ${
+                      queueClient.id === client.id ? "bg-blue-50 font-medium" : ""
+                    }`}
                   >
                     {index + 1}. {queueClient.name} {queueClient.id === client.id && "(você)"}
                   </li>
                 ))}
                 {queueClients.length > 5 && (
-                  <li className="text-sm text-gray-500 italic p-1">+ {queueClients.length - 5} pessoas na fila...</li>
+                  <li className="text-xs sm:text-sm text-gray-500 italic p-1">
+                    + {queueClients.length - 5} pessoas na fila...
+                  </li>
                 )}
               </ul>
             </div>
           ) : (
-            <p className="text-sm text-gray-500 text-center py-2">Não há ninguém na fila</p>
+            <p className="text-xs sm:text-sm text-gray-500 text-center py-2">Não há ninguém na fila</p>
           )}
         </div>
       </CardContent>
       <CardFooter>
-        <Button variant="destructive" className="w-full" onClick={handleAbandon} disabled={position === null}>
+        <Button
+          variant="destructive"
+          className="w-full"
+          onClick={handleAbandon}
+          disabled={position === null || isLoading}
+          size="sm"
+        >
           <AlertCircle className="h-4 w-4 mr-2" />
-          Desistir da Fila
+          {isLoading ? "Saindo..." : "Desistir da Fila"}
         </Button>
       </CardFooter>
     </Card>

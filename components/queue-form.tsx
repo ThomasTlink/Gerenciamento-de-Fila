@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -51,7 +50,7 @@ export default function QueueForm({ onSuccess }: QueueFormProps) {
 
       toast({
         title: "Sucesso!",
-        description: "Você entrou na fila com sucesso.",
+        description: "Você entrou na fila com sucesso. Você receberá notificações por email e SMS.",
       })
 
       onSuccess(data.client)
@@ -68,14 +67,18 @@ export default function QueueForm({ onSuccess }: QueueFormProps) {
 
   return (
     <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle>Entre na Fila</CardTitle>
-        <CardDescription>Preencha seus dados para entrar na fila de atendimento</CardDescription>
+      <CardHeader className="pb-4 sm:pb-6">
+        <CardTitle className="text-lg sm:text-xl">Entre na Fila</CardTitle>
+        <CardDescription className="text-sm sm:text-base">
+          Preencha seus dados para entrar na fila de atendimento
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleSubmit}>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Nome</Label>
+            <Label htmlFor="name" className="text-sm sm:text-base">
+              Nome
+            </Label>
             <Input
               id="name"
               name="name"
@@ -83,21 +86,28 @@ export default function QueueForm({ onSuccess }: QueueFormProps) {
               value={formData.name}
               onChange={handleChange}
               required
+              className="text-sm sm:text-base"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="phone">Telefone</Label>
+            <Label htmlFor="phone" className="text-sm sm:text-base">
+              Telefone
+            </Label>
             <Input
               id="phone"
               name="phone"
+              type="tel"
               placeholder="(00) 00000-0000"
               value={formData.phone}
               onChange={handleChange}
               required
+              className="text-sm sm:text-base"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email" className="text-sm sm:text-base">
+              Email
+            </Label>
             <Input
               id="email"
               name="email"
@@ -106,11 +116,12 @@ export default function QueueForm({ onSuccess }: QueueFormProps) {
               value={formData.email}
               onChange={handleChange}
               required
+              className="text-sm sm:text-base"
             />
           </div>
         </CardContent>
         <CardFooter>
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full text-sm sm:text-base" disabled={isLoading} size="sm">
             {isLoading ? "Entrando na fila..." : "Entrar na Fila"}
           </Button>
         </CardFooter>
