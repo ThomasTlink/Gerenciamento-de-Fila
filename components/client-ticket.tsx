@@ -18,6 +18,7 @@ export default function ClientTicket({ client, onAbandon, onReenter }: ClientTic
   const [queueClients, setQueueClients] = useState<Queue[]>([])
   const [position, setPosition] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default")
   const { toast } = useToast()
 
   useEffect(() => {
@@ -49,52 +50,81 @@ export default function ClientTicket({ client, onAbandon, onReenter }: ClientTic
         }
       } catch (error) {
         console.error("Erro ao obter dados da fila:", error)
-        toast({
-          variant: "destructive",
-          title: "Erro de conexão",
-          description: "Não foi possível atualizar os dados da fila.",
-        })
+        // Não mostrar toast de erro constantemente para não incomodar o usuário
       }
     }
 
     fetchQueueData()
     const interval = setInterval(fetchQueueData, 5000)
     return () => clearInterval(interval)
-  }, [client.id, toast])
+  }, [client.id])
 
-  // Configurar notificações do navegador
+  // Configurar notificações do navegador com tratamento de erro robusto
   useEffect(() => {
-    if ("Notification" in window) {
-      Notification.requestPermission()
+    const setupNotifications = async () => {
+      try {
+        if (typeof window === "undefined") return
+
+        if ("Notification" in window) {
+          const permission = await Notification.requestPermission()
+          setNotificationPermission(permission)
+        }
+      } catch (error) {
+        console.warn("Notificações não suportadas ou bloqueadas:", error)
+        setNotificationPermission("denied")
+      }
     }
+
+    setupNotifications()
   }, [])
+
+  // Função segura para enviar notificações
+  const sendSafeNotification = (title: string, body: string) => {
+    try {
+      if (typeof window !== "undefined" && "Notification" in window && notificationPermission === "granted") {
+        new Notification(title, {
+          body,
+          icon: "/favicon.ico",
+          tag: "queue-notification", // Evita múltiplas notificações
+        })
+      }
+    } catch (error) {
+      console.warn("Erro ao enviar notificação:", error)
+    }
+  }
+
+  // Função segura para tocar áudio
+  const playSafeAudio = () => {
+    try {
+      if (typeof window !== "undefined") {
+        const audio = new Audio("/notification.mp3")
+        audio.play().catch((e) => console.warn("Erro ao tocar áudio:", e))
+      }
+    } catch (error) {
+      console.warn("Erro ao configurar áudio:", error)
+    }
+  }
 
   // Verificar se é a vez do cliente
   useEffect(() => {
     if (currentTicket?.id === client.id) {
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("É a sua vez!", {
-          body: "Você tem 2 minutos para comparecer ao atendimento ou perderá sua vez na fila.",
-          icon: "/favicon.ico",
-        })
-      }
-
-      const audio = new Audio("/notification.mp3")
-      audio.play().catch((e) => console.error("Erro ao tocar áudio:", e))
+      sendSafeNotification(
+        "É a sua vez na Guido Couros!",
+        "Você tem 2 minutos para comparecer ao atendimento ou perderá sua vez na fila.",
+      )
+      playSafeAudio()
     }
-  }, [currentTicket, client.id])
+  }, [currentTicket, client.id, notificationPermission])
 
   // Verificar se o cliente está próximo de ser chamado
   useEffect(() => {
     if (position !== null && position >= 0 && position <= 3 && position !== -1) {
-      if ("Notification" in window && Notification.permission === "granted") {
-        new Notification("Quase na sua vez!", {
-          body: `Faltam apenas ${position} ${position === 1 ? "pessoa" : "pessoas"} para sua vez. Dirija-se para próximo da loja.`,
-          icon: "/favicon.ico",
-        })
-      }
+      sendSafeNotification(
+        "Quase na sua vez!",
+        `Faltam apenas ${position} ${position === 1 ? "pessoa" : "pessoas"} para sua vez. Dirija-se para próximo da Guido Couros.`,
+      )
     }
-  }, [position])
+  }, [position, notificationPermission])
 
   const handleAbandon = async () => {
     setIsLoading(true)
@@ -132,7 +162,7 @@ export default function ClientTicket({ client, onAbandon, onReenter }: ClientTic
     if (position === -1 || currentTicket?.id === client.id) {
       return (
         <div className="bg-green-100 p-3 sm:p-4 rounded-md text-green-800 text-center">
-          <h3 className="text-base sm:text-lg font-bold">É a sua vez!</h3>
+          <h3 className="text-base sm:text-lg font-bold">É a sua vez na Guido Couros!</h3>
           <p className="text-sm sm:text-base">Entre na loja imediatamente.</p>
           <p className="mt-2 text-red-600 font-bold text-xs sm:text-sm">
             Você tem apenas 2 minutos para comparecer ou perderá sua vez!
@@ -170,7 +200,7 @@ export default function ClientTicket({ client, onAbandon, onReenter }: ClientTic
             Faltam apenas {position} {position === 1 ? "pessoa" : "pessoas"} para sua vez!
           </p>
           <p className="text-center mt-2 font-bold text-xs sm:text-sm">
-            Por favor, dirija-se para próximo da loja agora!
+            Por favor, dirija-se para próximo da Guido Couros agora!
           </p>
         </div>
       )

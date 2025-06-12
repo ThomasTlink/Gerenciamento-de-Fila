@@ -3,7 +3,7 @@ export const EMAIL_CONFIG = {
   // Configurações do Resend
   resend: {
     apiKey: process.env.RESEND_API_KEY,
-    fromEmail: "onboarding@resend.dev", // Altere para seu domínio verificado
+    fromEmail: process.env.RESEND_FROM_EMAIL || "noreply@filaguidocouros.com.br",
   },
 
   // Configurações do AWS SES (para migração futura)
@@ -11,7 +11,7 @@ export const EMAIL_CONFIG = {
     region: process.env.AWS_REGION || "us-east-1",
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    fromEmail: process.env.AWS_SES_FROM_EMAIL || "noreply@seudominio.com",
+    fromEmail: process.env.AWS_SES_FROM_EMAIL || "noreply@filaguidocouros.com.br",
   },
 
   // Configuração para escolher o provedor
@@ -22,12 +22,12 @@ export const EMAIL_CONFIG = {
 export const EMAIL_TEMPLATES = {
   // Email de boas-vindas quando a pessoa entra na fila
   confirmation: {
-    subject: "✅ Você entrou na fila!",
+    subject: "✅ Você entrou na fila - Guido Couros!",
     getHtml: (name: string, ticketNumber: number, position: number) => `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
+        <div style="background: linear-gradient(135deg, #8B4513 0%, #A0522D 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
           <h1 style="color: white; margin: 0; font-size: 28px;">🎫 Ticket #${ticketNumber}</h1>
-          <p style="color: white; margin: 10px 0 0 0; font-size: 16px;">Você está na fila!</p>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 16px;">Você está na fila da Guido Couros!</p>
         </div>
         
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
@@ -36,7 +36,7 @@ export const EMAIL_TEMPLATES = {
             Você entrou na fila com sucesso e recebeu o ticket <strong>#${ticketNumber}</strong>.
           </p>
           
-          <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #667eea;">
+          <div style="background: white; padding: 15px; border-radius: 6px; border-left: 4px solid #8B4513;">
             <p style="margin: 0; color: #333;">
               <strong>Sua posição atual:</strong> ${position}º na fila
             </p>
@@ -55,13 +55,14 @@ export const EMAIL_TEMPLATES = {
         <div style="text-align: center; margin-top: 30px;">
           <p style="color: #999; font-size: 14px;">
             Obrigado pela paciência! 🙏<br>
-            <strong>Sistema de Gerenciamento de Filas</strong>
+            <strong>Guido Couros - Sistema de Filas</strong><br>
+            <a href="https://filaguidocouros.com.br" style="color: #8B4513;">filaguidocouros.com.br</a>
           </p>
         </div>
       </div>
     `,
     getText: (name: string, ticketNumber: number, position: number) => `
-      Ticket #${ticketNumber} - Você está na fila!
+      Ticket #${ticketNumber} - Você está na fila da Guido Couros!
       
       Olá, ${name}!
       
@@ -72,12 +73,13 @@ export const EMAIL_TEMPLATES = {
       Você receberá uma notificação quando for sua vez.
       
       Obrigado pela paciência!
+      Guido Couros
     `,
   },
 
   // Email de aviso quando faltam 3 pessoas
   almostYourTurn: {
-    subject: "⏰ Prepare-se! Quase na sua vez!",
+    subject: "⏰ Prepare-se! Quase na sua vez - Guido Couros!",
     getHtml: (name: string, position: number) => `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #ff9800 0%, #ff5722 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
@@ -88,7 +90,7 @@ export const EMAIL_TEMPLATES = {
         <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
           <h2 style="color: #333; margin-top: 0;">Olá, ${name}! 👋</h2>
           <p style="color: #666; line-height: 1.6;">
-            Você está quase sendo chamado! Faltam apenas <strong>${position} ${position === 1 ? "pessoa" : "pessoas"}</strong> para chegar a sua vez.
+            Você está quase sendo chamado na <strong>Guido Couros</strong>! Faltam apenas <strong>${position} ${position === 1 ? "pessoa" : "pessoas"}</strong> para chegar a sua vez.
           </p>
           
           <div style="background: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107;">
@@ -101,13 +103,14 @@ export const EMAIL_TEMPLATES = {
         <div style="text-align: center; margin-top: 30px;">
           <p style="color: #999; font-size: 14px;">
             Obrigado pela paciência! 🙏<br>
-            <strong>Sistema de Gerenciamento de Filas</strong>
+            <strong>Guido Couros - Sistema de Filas</strong><br>
+            <a href="https://filaguidocouros.com.br" style="color: #8B4513;">filaguidocouros.com.br</a>
           </p>
         </div>
       </div>
     `,
     getText: (name: string, position: number) => `
-      Prepare-se! Quase na sua vez!
+      Prepare-se! Quase na sua vez na Guido Couros!
       
       Olá, ${name}!
       
@@ -116,23 +119,24 @@ export const EMAIL_TEMPLATES = {
       Por favor, dirija-se para próximo da loja agora!
       
       Obrigado pela paciência!
+      Guido Couros
     `,
   },
 
   // Email quando a pessoa é chamada
   notification: {
-    subject: "🔔 É a sua vez!",
+    subject: "🔔 É a sua vez na Guido Couros! Compareça em até 2 minutos!",
     getHtml: (name: string) => `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
         <div style="background: linear-gradient(135deg, #4caf50 0%, #45a049 100%); padding: 30px; border-radius: 10px; text-align: center; margin-bottom: 20px;">
           <h1 style="color: white; margin: 0; font-size: 32px;">🎉 É a sua vez!</h1>
-          <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">Entre na loja agora!</p>
+          <p style="color: white; margin: 10px 0 0 0; font-size: 18px;">Entre na Guido Couros agora!</p>
         </div>
         
         <div style="background: #f8f9fa; padding: 25px; border-radius: 8px; margin-bottom: 20px;">
           <h2 style="color: #333; margin-top: 0;">Olá, ${name}! 👋</h2>
           <p style="color: #666; line-height: 1.6; font-size: 16px;">
-            Chegou a sua vez de ser atendido! Por favor, entre na loja <strong>imediatamente</strong>.
+            Chegou a sua vez de ser atendido na <strong>Guido Couros</strong>! Por favor, entre na loja <strong>imediatamente</strong>.
           </p>
         </div>
         
@@ -146,20 +150,24 @@ export const EMAIL_TEMPLATES = {
         <div style="text-align: center; margin-top: 30px;">
           <p style="color: #999; font-size: 14px;">
             Obrigado pela paciência! 🙏<br>
-            <strong>Sistema de Gerenciamento de Filas</strong>
+            <strong>Guido Couros - Sistema de Filas</strong><br>
+            <a href="https://filaguidocouros.com.br" style="color: #8B4513;">filaguidocouros.com.br</a>
           </p>
         </div>
       </div>
     `,
     getText: (name: string) => `
-      É a sua vez!
+      É a sua vez na Guido Couros!
       
       Olá, ${name}!
       
       Chegou a sua vez de ser atendido!
-      Por favor, apresente-se na porta da loja IMEDIATAMENTE.
+      Por favor, entre na loja IMEDIATAMENTE.
+      
+      ATENÇÃO: Você tem apenas 2 MINUTOS para comparecer, ou perderá sua vez na fila!
       
       Obrigado pela paciência!
+      Guido Couros
     `,
   },
 }

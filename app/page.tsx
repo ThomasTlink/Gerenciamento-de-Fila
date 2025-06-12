@@ -47,7 +47,7 @@ export default function HomePage() {
       <header className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto py-3 sm:py-4 px-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <Link href="/">
-            <h1 className="text-lg sm:text-xl font-bold text-gray-900">Sistema de Filas</h1>
+            <h1 className="text-lg sm:text-xl font-bold text-gray-900">Guido Couros - Fila Digital</h1>
           </Link>
           <Link href="/admin" passHref>
             <Button variant="ghost" size="sm">
@@ -72,7 +72,7 @@ export default function HomePage() {
       <footer className="bg-white border-t mt-auto">
         <div className="max-w-7xl mx-auto py-3 sm:py-4 px-4 sm:px-6 lg:px-8">
           <p className="text-center text-xs sm:text-sm text-gray-500">
-            &copy; {new Date().getFullYear()} Sistema de Gerenciamento de Filas
+            &copy; {new Date().getFullYear()} Guido Couros - Sistema de Fila Digital
           </p>
         </div>
       </footer>
